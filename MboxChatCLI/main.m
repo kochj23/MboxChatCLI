@@ -1,14 +1,5 @@
 #import <Foundation/Foundation.h>
-
-@interface Email : NSObject
-@property NSString *from;
-@property NSString *subject;
-@property NSString *date;
-@property NSString *body;
-@end
-
-@implementation Email
-@end
+#import "Email.h"
 
 BOOL isClearText(NSString *str) {
     NSData *data = [str dataUsingEncoding:NSUTF8StringEncoding];
