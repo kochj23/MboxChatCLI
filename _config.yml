@@ -1,0 +1,3 @@
+theme: jekyll-theme-cayman
+title: "MboxChatCLI"
+description: "Command-line tool for analyzing Apple Mail MBOX files — generate AI conversation data and search email archives. Built with Swift."
