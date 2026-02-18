@@ -358,3 +358,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 ---
 
 **MboxChatCLI** - Powerful email archive analysis for macOS.
+
+---
+
+> **Disclaimer:** This is a personal project created on my own time. It is not affiliated with, endorsed by, or representative of my employer.
