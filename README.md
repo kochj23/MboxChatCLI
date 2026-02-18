@@ -1,5 +1,7 @@
 # MboxChatCLI
 
+![Build](https://github.com/kochj23/MboxChatCLI/actions/workflows/build.yml/badge.svg)
+
 A powerful command-line tool for parsing, analyzing, and exporting MBOX email archives.
 
 ## Overview
