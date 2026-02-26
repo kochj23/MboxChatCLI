@@ -2,7 +2,7 @@
 
 ![Build](https://github.com/kochj23/MboxChatCLI/actions/workflows/build.yml/badge.svg)
 
-A powerful command-line tool for parsing, analyzing, and exporting MBOX email archives.
+A powerful command-line tool for parsing, analyzing, and exporting MBOX (Mailbox format) email archives.
 
 ## Overview
 
@@ -13,7 +13,7 @@ MboxChatCLI is a native macOS command-line application written in Objective-C th
 ### Core Functionality
 - ✅ **MBOX Parsing**: Reads standard MBOX format files
 - ✅ **Multi-file Support**: Load multiple MBOX files in one session
-- ✅ **Text Cleaning**: Automatically removes attachments, RTF, and non-ASCII characters
+- ✅ **Text Cleaning**: Automatically removes attachments, RTF (Rich Text Format), and non-ASCII (American Standard Code for Information Interchange) characters
 - ✅ **Thread Detection**: Groups emails by subject (case-insensitive)
 
 ### Search Capabilities
@@ -280,13 +280,13 @@ ls -lh /path/to/your.mbox
 **Solution**: Ensure the file is a valid MBOX format and readable
 ```bash
 file /path/to/your.mbox
-# Should show: "RFC 822 mail text" or similar
+# Should show: "RFC (Request for Comments) 822 mail text" or similar
 ```
 
 ### Problem: No emails loaded (shows "Loaded 0 emails")
 **Solutions**:
 - Verify MBOX format starts with `From ` (with space)
-- Check file encoding (should be UTF-8 or ASCII)
+- Check file encoding (should be UTF-8 (Unicode Transformation Format - 8-bit) or ASCII)
 - Ensure emails are not binary-encoded
 
 ### Problem: Missing email content in exports
@@ -298,9 +298,9 @@ file /path/to/your.mbox
 ## Limitations
 
 ### Current Limitations
-- Loads entire MBOX file into memory (not suitable for files >4GB on 8GB RAM systems)
+- Loads entire MBOX file into memory (not suitable for files >4GB on 8GB RAM (Random Access Memory) systems)
 - Thread detection based on subject only (doesn't use Message-ID/In-Reply-To headers)
-- No HTML rendering (HTML emails exported as raw HTML)
+- No HTML (Hypertext Markup Language) rendering (HTML emails exported as raw HTML)
 - No attachment extraction (attachments are removed)
 - No date range filtering
 - Search is case-insensitive substring match (no regex support yet)
@@ -310,7 +310,7 @@ file /path/to/your.mbox
 - Advanced thread detection (Message-ID, In-Reply-To, References headers)
 - Date range filtering
 - Regex search support
-- JSON/CSV export formats
+- JSON (JavaScript Object Notation)/CSV (Comma-Separated Values) export formats
 - Attachment extraction option
 - Progress indicators for large files
 
