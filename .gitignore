@@ -125,3 +125,5 @@ summaries/
 *.bak
 *.backup
 *~
+.build/
+*.xcuserstate
