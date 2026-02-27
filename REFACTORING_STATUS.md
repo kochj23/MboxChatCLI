@@ -96,7 +96,7 @@
 - [ ] Optimization of thread grouping
 
 ### Phase 6: Cleanup
-- [ ] Delete /Users/kochj/Desktop/xcode/MboxChatCLI_new/
+- [ ] Delete ~/Desktop/xcode/MboxChatCLI_new/
 - [ ] Move Python prototype to prototypes/
 - [ ] Archive large test file
 - [ ] Final code review
@@ -146,7 +146,7 @@
 
 ### Current Build (Original)
 ```bash
-cd /Users/kochj/Desktop/xcode/MboxChatCLI
+cd ~/Desktop/xcode/MboxChatCLI
 xcodebuild -project MboxChatCLI.xcodeproj -scheme MboxChatCLI -configuration Debug build
 ```
 

@@ -19,7 +19,7 @@ Add the 6 files that have been created but aren't yet in the Xcode project.
 ### How
 1. Open Xcode:
    ```bash
-   cd /Users/kochj/Desktop/xcode/MboxChatCLI
+   cd ~/Desktop/xcode/MboxChatCLI
    open MboxChatCLI.xcodeproj
    ```
 
@@ -27,7 +27,7 @@ Add the 6 files that have been created but aren't yet in the Xcode project.
 
 3. Select "Add Files to 'MboxChatCLI'..."
 
-4. Navigate to `/Users/kochj/Desktop/xcode/MboxChatCLI/MboxChatCLI/`
+4. Navigate to `~/Desktop/xcode/MboxChatCLI/MboxChatCLI/`
 
 5. Select these 6 files (hold ⌘ to multi-select):
    - `Models/Email.h`
@@ -100,7 +100,7 @@ int main(int argc, const char * argv[]) {
 
 ### Build
 ```bash
-cd /Users/kochj/Desktop/xcode/MboxChatCLI
+cd ~/Desktop/xcode/MboxChatCLI
 xcodebuild -project MboxChatCLI.xcodeproj \
            -scheme MboxChatCLI \
            -configuration Debug \
@@ -113,7 +113,7 @@ xcodebuild -project MboxChatCLI.xcodeproj \
 find ~/Library/Developer/Xcode/DerivedData -name "MboxChatCLI" -type f | grep Debug
 
 # Run with test file
-./MboxChatCLI /Users/kochj/Desktop/xcode/mbox/2018-01.mbox
+./MboxChatCLI ~/Desktop/xcode/mbox/2018-01.mbox
 
 # Test commands
 > from john
@@ -170,24 +170,24 @@ The current main.m works perfectly fine. You can:
 ### Delete Unused Files
 ```bash
 # Delete MboxChatCLI_new (empty build products)
-rm -rf /Users/kochj/Desktop/xcode/MboxChatCLI_new/
+rm -rf ~/Desktop/xcode/MboxChatCLI_new/
 
 # Delete .DS_Store files
-find /Users/kochj/Desktop/xcode/MboxChatCLI -name ".DS_Store" -delete
+find ~/Desktop/xcode/MboxChatCLI -name ".DS_Store" -delete
 ```
 
 ### Move Python Prototype
 ```bash
-mkdir -p /Users/kochj/Desktop/xcode/MboxChatCLI/prototypes
-mv /Users/kochj/Desktop/xcode/mbox/mbox_query.py \
-   /Users/kochj/Desktop/xcode/MboxChatCLI/prototypes/
+mkdir -p ~/Desktop/xcode/MboxChatCLI/prototypes
+mv ~/Desktop/xcode/mbox/mbox_query.py \
+   ~/Desktop/xcode/MboxChatCLI/prototypes/
 ```
 
 ### Archive Large Test File
 ```bash
 # Move large test file out of git repo
 mkdir -p ~/Documents/MboxTestData
-mv /Users/kochj/Desktop/xcode/mbox/2018-01.mbox \
+mv ~/Desktop/xcode/mbox/2018-01.mbox \
    ~/Documents/MboxTestData/
 ```
 
@@ -197,7 +197,7 @@ mv /Users/kochj/Desktop/xcode/mbox/2018-01.mbox \
 
 ### Initial Commit
 ```bash
-cd /Users/kochj/Desktop/xcode/MboxChatCLI
+cd ~/Desktop/xcode/MboxChatCLI
 git add .gitignore README.md CHANGELOG.md DEVELOPMENT.md ANALYSIS.md
 git add REFACTORING_STATUS.md IMPLEMENTATION_SUMMARY.md NEXT_STEPS.md
 git commit -m "Docs: Add comprehensive documentation"

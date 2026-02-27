@@ -36,7 +36,7 @@ MboxChatCLI is a native macOS command-line application written in Objective-C th
 
 1. Clone the repository:
    ```bash
-   cd /Users/kochj/Desktop/xcode/MboxChatCLI
+   cd ~/Desktop/xcode/MboxChatCLI
    ```
 
 2. Open the Xcode project:

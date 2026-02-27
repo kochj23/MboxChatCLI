@@ -83,7 +83,7 @@ MboxChatCLI/
 
 #### 1. Clone/Navigate to Project
 ```bash
-cd /Users/kochj/Desktop/xcode/MboxChatCLI
+cd ~/Desktop/xcode/MboxChatCLI
 ```
 
 #### 2. Open in Xcode

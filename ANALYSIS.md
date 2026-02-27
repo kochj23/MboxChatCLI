@@ -20,7 +20,7 @@ MboxChatCLI is a command-line tool for parsing, analyzing, and exporting MBOX em
 ### Current Directory Layout
 
 ```
-/Users/kochj/Desktop/xcode/
+~/Desktop/xcode/
 ├── mbox/                          # Python prototype
 │   ├── mbox_query.py              # 63-line Python version
 │   └── 2018-01.mbox               # 1.8GB test data
@@ -333,12 +333,12 @@ MboxChatCLITests/
 
 1. **`MboxChatCLI_new/`**: Empty build products directory
    ```bash
-   rm -rf /Users/kochj/Desktop/xcode/MboxChatCLI_new/
+   rm -rf ~/Desktop/xcode/MboxChatCLI_new/
    ```
 
 2. **`.DS_Store` files**: macOS metadata
    ```bash
-   find /Users/kochj/Desktop/xcode/MboxChatCLI -name ".DS_Store" -delete
+   find ~/Desktop/xcode/MboxChatCLI -name ".DS_Store" -delete
    ```
 
 ### Move/Archive
