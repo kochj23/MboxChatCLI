@@ -1,232 +1,228 @@
 # MboxChatCLI
 
 ![Build](https://github.com/kochj23/MboxChatCLI/actions/workflows/build.yml/badge.svg)
+![Platform](https://img.shields.io/badge/platform-macOS-blue)
+![Language](https://img.shields.io/badge/language-Objective--C-orange)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-A powerful command-line tool for parsing, analyzing, and exporting MBOX (Mailbox format) email archives.
+A native macOS command-line tool for parsing, searching, threading, and exporting MBOX email archives. Built in Objective-C with the Foundation framework -- no third-party dependencies.
 
-## Overview
+---
 
-MboxChatCLI is a native macOS command-line application written in Objective-C that allows you to work with MBOX email archive files. It provides searching, thread extraction, summarization, and export capabilities for email archives.
+## Architecture
+
+```
++------------------------------------------------------------------+
+|                          MboxChatCLI                             |
++------------------------------------------------------------------+
+|                                                                  |
+|   +-----------------+    +-------------------+                   |
+|   |   main.m        |    |  Interactive CLI   |                  |
+|   |  (entry point)  |--->|  Command Loop      |                  |
+|   +-----------------+    +--------+----------+                   |
+|                                   |                              |
+|          +------------------------+------------------------+     |
+|          |            |           |           |             |     |
+|          v            v           v           v             v     |
+|   +-----------+ +-----------+ +--------+ +---------+ +---------+ |
+|   | parseMbox | | from      | | write  | | export  | |summarize| |
+|   | (parser)  | | subject   | | (msgs) | |(threads)| |(threads)| |
+|   +-----------+ | count     | +--------+ +---------+ +---------+ |
+|        |        | (search)  |      |          |            |     |
+|        v        +-----------+      +----------+------------+     |
+|   +-----------+       |            |                             |
+|   |  Email    |       v            v                             |
+|   |  Model    |  +------------+  +-----------------+             |
+|   | (Email.h) |  |  Text      |  |  Filename       |            |
+|   | (Email.m) |  |  Processor |  |  Generator      |            |
+|   +-----------+  +------------+  +-----------------+             |
+|                  | isClearText |  | safeExportName  |            |
+|                  | stripNonASCII| | safeWriteName   |            |
+|                  | removeRTF   | | safeSummaryName  |            |
+|                  | trim        | | sanitize         |            |
+|                  +------------+  +-----------------+             |
+|                                                                  |
++------------------------------------------------------------------+
+         |                                        |
+         v                                        v
+  +-------------+                        +------------------+
+  | .mbox files |                        | Output Directory |
+  | (RFC 4155)  |                        | message0001.txt  |
+  +-------------+                        | export *.txt     |
+                                         | summary *.txt    |
+                                         +------------------+
+```
+
+### Data Flow
+
+```
+.mbox file(s) --> parseMbox() --> [Email] array --> Command Loop
+                                                       |
+                      +------------+-------------------+------------------+
+                      |            |                   |                  |
+                   search       write             export             summarize
+                   (stdout)   (1 file/msg)     (1 file/thread)    (1 summary/thread)
+```
+
+Emails flow through a three-stage pipeline: **parse** (split MBOX into messages, extract headers, strip attachments and RTF), **store** (hold in an `NSMutableArray` of `Email` objects), and **act** (search, filter, or export via the interactive command loop).
+
+---
 
 ## Features
 
-### Core Functionality
-- ✅ **MBOX Parsing**: Reads standard MBOX format files
-- ✅ **Multi-file Support**: Load multiple MBOX files in one session
-- ✅ **Text Cleaning**: Automatically removes attachments, RTF (Rich Text Format), and non-ASCII (American Standard Code for Information Interchange) characters
-- ✅ **Thread Detection**: Groups emails by subject (case-insensitive)
+**Parsing**
+- Reads standard MBOX format files (RFC 4155)
+- Multi-file loading -- combine several archives in one session
+- Automatic stripping of RTF content, MIME attachments, and multipart/mixed sections
+- Filters out binary-encoded messages, keeping only clean ASCII text
 
-### Search Capabilities
-- **Search by Sender**: Find all emails from a specific sender
-- **Search by Subject**: Find emails containing keywords in subject
-- **Search by Body**: Count emails mentioning specific keywords in body
+**Search**
+- Search by sender (`from`) -- case-insensitive substring match
+- Search by subject keyword (`subject`) -- case-insensitive substring match
+- Count keyword occurrences in message bodies (`count`)
 
-### Export Features
-- **Individual Messages**: Export each message as a separate text file
-- **Thread Export**: Export entire conversation threads as single files
-- **Thread Summaries**: Generate summary files with thread metadata
+**Export**
+- Write individual messages as numbered text files (`message0001.txt`, `message0002.txt`, ...)
+- Export entire conversation threads grouped by subject, each as a single file
+- Generate per-thread summary files with metadata: subject, message count, first/last sender, date range, opening and closing sentences
+
+**Text Processing**
+- ASCII validation and conversion for maximum output compatibility
+- Non-printable and non-ASCII character stripping
+- Safe filename generation with forbidden-character replacement and 48-character truncation
+
+---
 
 ## Installation
 
 ### Requirements
+
 - macOS 10.13 (High Sierra) or later
 - Xcode 14.0 or later (for building from source)
 
-### Building from Source
+### Build from Source
 
-1. Clone the repository:
-   ```bash
-   cd ~/Desktop/xcode/MboxChatCLI
-   ```
+Clone and build with Xcode:
 
-2. Open the Xcode project:
-   ```bash
-   open MboxChatCLI.xcodeproj
-   ```
+```bash
+git clone https://github.com/kochj23/MboxChatCLI.git
+cd MboxChatCLI
+open MboxChatCLI.xcodeproj
+```
 
-3. Build the project (⌘B) or run directly (⌘R)
+Build the project with Cmd+B. The compiled binary lands in:
 
-4. The compiled binary will be in:
-   ```
-   ~/Library/Developer/Xcode/DerivedData/MboxChatCLI-.../Build/Products/Debug/MboxChatCLI
-   ```
+```
+build/Release/MboxChatCLI
+```
+
+Or build from the command line:
+
+```bash
+xcodebuild build \
+  -project MboxChatCLI.xcodeproj \
+  -scheme MboxChatCLI \
+  -configuration Release \
+  -derivedDataPath build
+```
+
+### Install the Binary
+
+Copy the built binary to a location on your PATH:
+
+```bash
+cp build/Release/MboxChatCLI /usr/local/bin/
+```
+
+---
 
 ## Usage
 
-### Starting the Application
+### Launch
 
-**With MBOX file(s) as arguments**:
+Pass one or more MBOX files as arguments:
+
 ```bash
-./MboxChatCLI /path/to/archive.mbox
-./MboxChatCLI file1.mbox file2.mbox file3.mbox
+MboxChatCLI /path/to/archive.mbox
+MboxChatCLI inbox.mbox sent.mbox drafts.mbox
 ```
 
-**Interactive mode** (prompts for file path):
+Or launch without arguments for interactive file entry:
+
 ```bash
-./MboxChatCLI
+MboxChatCLI
 Enter path(s) to .mbox files (comma-separated): /path/to/archive.mbox
 ```
 
 ### Commands
 
-Once loaded, use these commands:
+Once emails are loaded, the interactive prompt accepts these commands:
 
-#### Search Commands
+| Command | Description |
+|---|---|
+| `load <file>` | Load an additional MBOX file into the current session |
+| `from <sender>` | Count emails matching a sender (case-insensitive) |
+| `subject <keyword>` | Count emails with keyword in subject line |
+| `count <keyword>` | Count emails with keyword in body text |
+| `write <dir>` | Export each message as a separate text file |
+| `export <dir>` | Export conversation threads, one file per thread |
+| `summarize <dir>` | Generate a summary file for each thread |
+| `help` | Show available commands |
+| `exit` | Quit the application |
 
-**Search by sender**:
-```
-> from john
-Found 42 emails from 'john'.
-```
+### Examples
 
-**Search by subject keyword**:
-```
-> subject urgent
-Found 15 emails with 'urgent' in subject.
-```
+Search for all emails from a specific person:
 
-**Count keyword in body**:
 ```
-> count deadline
-23 emails mention 'deadline'.
-```
-
-#### Export Commands
-
-**Write individual messages**:
-```
-> write /path/to/output/dir
-[INFO] Wrote 1523 individual messages.
-```
-Creates: `message0001.txt`, `message0002.txt`, etc.
-
-**Export threads**:
-```
-> export /path/to/output/dir
-[INFO] Exported 342 threads (each as a single file named 'export ...').
-```
-Creates: `export Project_Alpha_Discussion.txt`, etc.
-
-**Summarize threads**:
-```
-> summarize /path/to/output/dir
-[INFO] Wrote summary of 342 threads.
-```
-Creates: `summary Project_Alpha_Discussion.txt`, etc.
-
-#### Utility Commands
-
-**Load additional MBOX file**:
-```
-> load /path/to/another.mbox
-Now loaded 2845 emails (total).
-```
-
-**Show help**:
-```
-> help
-Commands:
-  load <mbox file>     - Load/add another mbox file
-  from <sender>        - Count emails by sender
-  ...
-```
-
-**Exit application**:
-```
-> exit
-Bye!
-```
-
-## Examples
-
-### Example 1: Find All Emails from a Specific Person
-
-```bash
-$ ./MboxChatCLI archive.mbox
-Loaded 1523 emails.
-
 > from alice@example.com
 Found 87 emails from 'alice@example.com'.
 ```
 
-### Example 2: Export All Project-Related Threads
+Export all threads to a directory (created automatically if it does not exist):
 
-```bash
-> subject project alpha
-Found 45 emails with 'project alpha' in subject.
-
-> export ~/Desktop/ProjectAlpha
-[INFO] Exported 12 threads (each as a single file named 'export ...').
+```
+> export ~/Desktop/email-threads
+[INFO] Exported 342 threads (each as a single file named 'export ...').
 ```
 
-### Example 3: Analyze Email Volume
+Generate thread summaries:
 
-```bash
-> from bob
-Found 234 emails from 'bob'.
-
-> from alice
-Found 189 emails from 'alice'.
-
-> count meeting
-156 emails mention 'meeting'.
 ```
-
-### Example 4: Generate Thread Summaries
-
-```bash
-> summarize ~/Documents/EmailSummaries
+> summarize ~/Documents/summaries
 [INFO] Wrote summary of 342 threads.
 ```
 
-Each summary file contains:
+Load a second archive mid-session:
+
 ```
-Subject: Re: Q4 Budget Planning
-Thread length: 8 message(s)
-From: john@company.com (Mon, 15 Jan 2024 09:23:45 -0800)
-To:   alice@company.com (Wed, 17 Jan 2024 14:32:10 -0800)
-Thread began: We need to finalize the Q4 budget by next week
-Thread ended: Great, I'll send the final numbers to finance tomorrow
+> load /path/to/another.mbox
+Now loaded 4200 emails (total).
 ```
 
-## File Formats
+---
 
-### Input Format
+## Output Formats
 
-**MBOX** - Standard UNIX mailbox format:
-```
-From sender@example.com Mon Jan 15 09:23:45 2024
-From: sender@example.com
-To: recipient@example.com
-Subject: Test Email
-Date: Mon, 15 Jan 2024 09:23:45 -0800
+### Individual Messages (`write`)
 
-Email body content here.
-
-From sender2@example.com Mon Jan 16 10:00:00 2024
-From: sender2@example.com
-...
-```
-
-### Output Formats
-
-**Individual Messages** (`write` command):
 ```
 From: john@example.com
 Subject: Project Update
 Date: Mon, 15 Jan 2024 09:23:45 -0800
 
-Email body content (ASCII, no attachments)
+Email body content (ASCII only, attachments removed)
 ```
 
-**Thread Export** (`export` command):
+### Thread Export (`export`)
+
 ```
 ----- Email #1 -----
 From: john@example.com
 Subject: Project Update
 Date: Mon, 15 Jan 2024 09:23:45 -0800
 
-First email body
+First message body
 
 ----- Email #2 -----
 From: alice@example.com
@@ -236,7 +232,8 @@ Date: Mon, 15 Jan 2024 14:30:12 -0800
 Reply body
 ```
 
-**Thread Summary** (`summarize` command):
+### Thread Summary (`summarize`)
+
 ```
 Subject: Project Update
 Thread length: 5 message(s)
@@ -246,121 +243,82 @@ Thread began: We need to discuss the project timeline
 Thread ended: Sounds good, let's meet Thursday at 2pm
 ```
 
+---
+
 ## Technical Details
 
-### Text Processing
-
-- **ASCII Conversion**: All output is converted to ASCII for maximum compatibility
-- **Attachment Removal**: RTF content and file attachments are automatically stripped
-- **Safe Filenames**: Special characters are replaced with underscores in filenames
-- **Maximum Filename Length**: 48 characters (truncated if longer)
-
-### Thread Detection
-
-Emails are grouped into threads based on:
-- **Subject matching** (case-insensitive)
-- Emails with identical subjects are grouped together
-- Each thread is sorted by date (oldest first)
-
-### Memory Considerations
-
-- All emails are loaded into memory
-- For very large archives (>2GB), consider splitting the MBOX file first
-- Future versions will include streaming support for large files
-
-## Troubleshooting
-
-### Problem: "File not found" error
-**Solution**: Verify the MBOX file path is correct and file exists
-```bash
-ls -lh /path/to/your.mbox
-```
-
-### Problem: "Failed to load" error
-**Solution**: Ensure the file is a valid MBOX format and readable
-```bash
-file /path/to/your.mbox
-# Should show: "RFC (Request for Comments) 822 mail text" or similar
-```
-
-### Problem: No emails loaded (shows "Loaded 0 emails")
-**Solutions**:
-- Verify MBOX format starts with `From ` (with space)
-- Check file encoding (should be UTF-8 (Unicode Transformation Format - 8-bit) or ASCII)
-- Ensure emails are not binary-encoded
-
-### Problem: Missing email content in exports
-**Solution**: Binary or heavily-encoded emails are skipped. Check if original emails contain plain text.
-
-### Problem: Exported filenames are garbled
-**Solution**: Special characters and non-ASCII are replaced with underscores. This is intentional for filesystem compatibility.
-
-## Limitations
-
-### Current Limitations
-- Loads entire MBOX file into memory (not suitable for files >4GB on 8GB RAM (Random Access Memory) systems)
-- Thread detection based on subject only (doesn't use Message-ID/In-Reply-To headers)
-- No HTML (Hypertext Markup Language) rendering (HTML emails exported as raw HTML)
-- No attachment extraction (attachments are removed)
-- No date range filtering
-- Search is case-insensitive substring match (no regex support yet)
-
-### Planned Features
-- Streaming parser for large files
-- Advanced thread detection (Message-ID, In-Reply-To, References headers)
-- Date range filtering
-- Regex search support
-- JSON (JavaScript Object Notation)/CSV (Comma-Separated Values) export formats
-- Attachment extraction option
-- Progress indicators for large files
-
-## Project Structure
+### Source Structure
 
 ```
 MboxChatCLI/
-├── README.md                      # This file
-├── CHANGELOG.md                   # Version history
-├── DEVELOPMENT.md                 # Developer documentation
-├── ANALYSIS.md                    # Architecture analysis
-├── MboxChatCLI.xcodeproj/         # Xcode project
-└── MboxChatCLI/
-    └── main.m                     # Main source file
+    MboxChatCLI/
+        main.m                          -- Entry point, MBOX parser, command loop
+        Models/
+            Email.h / Email.m           -- Email data model (from, subject, date, body)
+        Utilities/
+            TextProcessor.h / .m        -- ASCII validation, stripping, RTF removal
+            FilenameGenerator.h / .m    -- Safe filename generation with sanitization
+        CLI/                            -- (reserved for future CLI module extraction)
+        Commands/                       -- (reserved for future command classes)
+        Parsers/                        -- (reserved for future parser extraction)
+    MboxChatCLI.xcodeproj/
+    .github/
+        workflows/
+            build.yml                   -- CI build on macOS 14 (Xcode latest-stable)
 ```
 
-## Contributing
+**~870 lines of Objective-C** across 7 source files.
 
-### Reporting Issues
-Please include:
-- macOS version
-- MBOX file size
-- Steps to reproduce
-- Expected vs actual behavior
+### MBOX Parsing Strategy
 
-### Development
-See [DEVELOPMENT.md](DEVELOPMENT.md) for:
-- Architecture overview
-- Building instructions
-- Testing guidelines
-- Code style guide
+The parser splits the entire file on `"\nFrom "` boundaries (the standard MBOX separator per RFC 4155). For each chunk it extracts `From:`, `Subject:`, and `Date:` headers by prefix matching, then treats everything after the first blank line as the body. The body passes through `removeAttachmentsAndRTF()` to strip MIME parts, and messages that fail `isClearText()` validation (contain non-ASCII binary data) are silently discarded.
+
+### Thread Grouping
+
+Threads are grouped by lowercased subject string. All messages sharing the same subject (after case-folding) are collected into a single thread array, then sorted chronologically by date string for export and summary generation.
+
+### Filename Safety
+
+Exported filenames are sanitized by:
+1. Stripping all non-ASCII characters
+2. Replacing forbidden filesystem characters (`/ \ : ? % * | " < > '`) with underscores
+3. Truncating to 48 characters maximum
+4. Falling back to `threadNNNN` if the subject is empty or fully sanitized away
+
+### Memory Model
+
+All emails are loaded into memory as an `NSMutableArray<Email *>`. For archives exceeding available RAM (typically >2-4 GB depending on system memory), split the MBOX file before processing.
+
+---
+
+## Limitations
+
+- Entire MBOX file is loaded into memory -- not suitable for multi-gigabyte archives on low-memory systems
+- Thread detection uses subject matching only (does not use Message-ID, In-Reply-To, or References headers)
+- No HTML rendering -- HTML emails are exported as raw markup
+- No attachment extraction -- binary attachments are stripped, not saved
+- No date range filtering
+- Search uses case-insensitive substring matching only (no regex)
+- No JSON or CSV export format
+
+---
+
+## CI/CD
+
+The project uses GitHub Actions for continuous integration. Every push and pull request to `main` or `master` triggers a build on macOS 14 with the latest stable Xcode. See `.github/workflows/build.yml`.
+
+---
 
 ## License
 
-[Specify your license here]
-
-## Version History
-
-See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
-
-## Acknowledgments
-
-- Built with Objective-C and Foundation framework
-- MBOX format parsing based on RFC 4155
-- Inspired by the need for local email archive analysis tools
+MIT License. Copyright (c) 2025 Jordan Koch. See [LICENSE](LICENSE) for the full text.
 
 ---
 
-**MboxChatCLI** - Powerful email archive analysis for macOS.
+## Contributing
+
+Issues and pull requests are welcome. When reporting a bug, include your macOS version, MBOX file size, steps to reproduce, and expected versus actual behavior. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
-> **Disclaimer:** This is a personal project created on my own time. It is not affiliated with, endorsed by, or representative of my employer.
+Written by Jordan Koch ([kochj23](https://github.com/kochj23)).
