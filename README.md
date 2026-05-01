@@ -1,9 +1,9 @@
 # MboxChatCLI
 
 ![Build](https://github.com/kochj23/MboxChatCLI/actions/workflows/build.yml/badge.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS-blue)
 ![Language](https://img.shields.io/badge/language-Objective--C-orange)
-![License](https://img.shields.io/badge/license-MIT-green)
 
 A native macOS command-line tool for parsing, searching, threading, and exporting MBOX email archives. Built in Objective-C with the Foundation framework -- no third-party dependencies.
 
@@ -288,6 +288,66 @@ Exported filenames are sanitized by:
 ### Memory Model
 
 All emails are loaded into memory as an `NSMutableArray<Email *>`. For archives exceeding available RAM (typically >2-4 GB depending on system memory), split the MBOX file before processing.
+
+---
+
+## Architecture (Mermaid)
+
+```mermaid
+graph TD
+    A[.mbox Files] --> B[parseMbox]
+    B --> C[Email Array]
+    C --> D{Interactive CLI}
+    D -->|from| E[Search by Sender]
+    D -->|subject| F[Search by Subject]
+    D -->|count| G[Count Keyword]
+    D -->|write| H[Write Individual Messages]
+    D -->|export| I[Export Threads]
+    D -->|summarize| J[Generate Summaries]
+    D -->|load| K[Load More MBOX]
+    K --> B
+    
+    B --> L[removeAttachmentsAndRTF]
+    L --> M[isClearText Filter]
+    M --> C
+    
+    H --> N[safeWriteFilename]
+    I --> O[safeExportFilename]
+    J --> P[safeSummaryFilename]
+    N --> Q[Output Directory]
+    O --> Q
+    P --> Q
+    
+    subgraph TextProcessor
+        L
+        M
+        R[stripNonASCII]
+        S[trim]
+    end
+    
+    subgraph FilenameGenerator
+        N
+        O
+        P
+        T[sanitizeForFilename]
+    end
+```
+
+---
+
+## Test Coverage
+
+| Category | Tests | Description |
+|----------|-------|-------------|
+| Email Model | 6 | Init, values, nil, description, copy semantics |
+| TextProcessor | 12 | isClearText, stripNonASCII, removeRTF, trim, sentences |
+| FilenameGenerator | 7 | Write, export, summary, special chars, truncation |
+| C Functions | 6 | Direct tests of main.m public functions |
+| MBOX Parsing | 5 | Basic parse, headers, not found, empty, multi-email |
+| Thread Sentences | 4 | First/last sentence from thread, empty thread |
+| Functional | 2 | End-to-end parse+write, RTF stripping pipeline |
+| Security | 7 | Path traversal, null bytes, long input, XSS, binary |
+| **Total** | **49** | |
 
 ---
 

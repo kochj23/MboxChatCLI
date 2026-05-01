@@ -24,7 +24,7 @@
                      subject:(NSString *)subject
                         date:(NSString *)date
                         body:(NSString *)body {
-    self = [super init];
+    self = [self init];
     if (self) {
         _from = [from copy];
         _subject = [subject copy];
