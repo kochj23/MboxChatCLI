@@ -75,60 +75,93 @@ NSString *safeSummaryFilename(NSString *subject, NSUInteger threadNum) {
     return [NSString stringWithFormat:@"summary %@.txt", clean];
 }
 
-// MBOX parsing
+// MBOX parsing — streaming line-by-line to avoid loading entire file into memory.
+// Also handles mboxrd format: lines starting with ">From " are escaped quotes,
+// not message separators.
 NSArray<Email *> *parseMbox(NSString *path) {
     printf("[DEBUG] Attempting to load mbox file: %s\n", [path UTF8String]);
-    NSError *err = nil;
-    NSString *mbox = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&err];
-    if (!mbox) {
-        printf("[ERROR] Failed to load '%s': %s\n", [path UTF8String], [[err localizedDescription] UTF8String]);
+
+    FILE *fp = fopen([path UTF8String], "r");
+    if (!fp) {
+        printf("[ERROR] Failed to open '%s'\n", [path UTF8String]);
         return @[];
     }
-    printf("[DEBUG] File loaded successfully: '%s' (%lu characters)\n", [path UTF8String], (unsigned long)[mbox length]);
 
-    if (![mbox hasPrefix:@"\n"]) {
-        mbox = [NSString stringWithFormat:@"\n%@", mbox];
-    }
+    NSMutableArray<Email *> *result = [NSMutableArray array];
+    char buf[65536];
+    BOOL inMessage = NO;
+    BOOL inBody = NO;
+    Email *currentEmail = nil;
+    NSMutableString *currentBody = nil;
+    NSUInteger lineCount = 0;
 
-    NSArray *chunks = [mbox componentsSeparatedByString:@"\nFrom "];
-    if ([chunks count] > 0 && [chunks[0] length] == 0) {
-        chunks = [chunks subarrayWithRange:NSMakeRange(1, [chunks count] - 1)];
-    }
-    printf("[DEBUG] Number of message chunks found: %lu\n", (unsigned long)[chunks count]);
+    while (fgets(buf, sizeof(buf), fp) != NULL) {
+        lineCount++;
+        // Convert to NSString (UTF-8). If it fails, skip this line.
+        NSString *line = [[NSString alloc] initWithUTF8String:buf];
+        if (!line) continue;
 
-    NSMutableArray *result = [NSMutableArray array];
-    NSUInteger msgNum = 1;
-    for (NSString *chunk in chunks) {
-        Email *e = [Email new];
-        NSArray *lines = [chunk componentsSeparatedByString:@"\n"];
-        BOOL inBody = NO;
-        NSMutableString *body = [NSMutableString string];
+        // Strip trailing newline
+        if ([line hasSuffix:@"\n"]) {
+            line = [line substringToIndex:line.length - 1];
+        }
+        if ([line hasSuffix:@"\r"]) {
+            line = [line substringToIndex:line.length - 1];
+        }
 
-        for (NSString *line in lines) {
-            if (!inBody) {
-                if ([line hasPrefix:@"From:"]) {
-                    e.from = [[line substringFromIndex:5] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-                } else if ([line hasPrefix:@"Subject:"]) {
-                    e.subject = [[line substringFromIndex:8] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-                } else if ([line hasPrefix:@"Date:"]) {
-                    e.date = [[line substringFromIndex:5] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-                } else if ([line isEqualToString:@""]) {
-                    inBody = YES;
+        // Detect message separator: "From " at line start (not ">From " which is mboxrd escaping)
+        BOOL isFromLine = [line hasPrefix:@"From "] && ![line hasPrefix:@">From "];
+
+        if (isFromLine) {
+            // Finalize previous message
+            if (currentEmail) {
+                currentEmail.body = removeAttachmentsAndRTF(currentBody ?: [NSMutableString string]);
+                if (isClearText(currentEmail.body) && (currentEmail.from || currentEmail.subject)) {
+                    [result addObject:currentEmail];
                 }
-            } else {
-                [body appendString:line];
-                [body appendString:@"\n"];
             }
+            // Start new message
+            currentEmail = [Email new];
+            currentBody = [NSMutableString string];
+            inMessage = YES;
+            inBody = NO;
+            continue;
         }
-        e.body = removeAttachmentsAndRTF(body);
 
-        if (!isClearText(e.body)) {
-            // skip
-        } else if (e.from || e.subject) {
-            [result addObject:e];
+        if (!inMessage) continue;
+
+        if (!inBody) {
+            // Parse headers
+            if ([line hasPrefix:@"From:"]) {
+                currentEmail.from = [[line substringFromIndex:5] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            } else if ([line hasPrefix:@"Subject:"]) {
+                currentEmail.subject = [[line substringFromIndex:8] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            } else if ([line hasPrefix:@"Date:"]) {
+                currentEmail.date = [[line substringFromIndex:5] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            } else if ([line isEqualToString:@""]) {
+                inBody = YES;
+            }
+        } else {
+            // Un-escape mboxrd ">From " lines: strip leading ">"
+            if ([line hasPrefix:@">From "]) {
+                line = [line substringFromIndex:1];
+            }
+            [currentBody appendString:line];
+            [currentBody appendString:@"\n"];
         }
-        msgNum++;
     }
+
+    // Finalize last message
+    if (currentEmail) {
+        currentEmail.body = removeAttachmentsAndRTF(currentBody ?: [NSMutableString string]);
+        if (isClearText(currentEmail.body) && (currentEmail.from || currentEmail.subject)) {
+            [result addObject:currentEmail];
+        }
+    }
+
+    fclose(fp);
+    printf("[DEBUG] Parsed %lu messages from %lu lines in '%s'\n",
+           (unsigned long)result.count, (unsigned long)lineCount, [path UTF8String]);
     return result;
 }
 
@@ -179,7 +212,7 @@ void writeMessagesToDirectory(NSArray<Email *> *emails, NSString *dirPath) {
         [content appendString:@"\n"];
         [content appendString:stripNonASCII(e.body ?: @"")];
         NSError *error = nil;
-        [content writeToFile:fullPath atomically:YES encoding:NSASCIIStringEncoding error:&error];
+        [content writeToFile:fullPath atomically:YES encoding:NSUTF8StringEncoding error:&error];
         msgNum++;
     }
     printf("[INFO] Wrote %lu individual messages.\n", (unsigned long)emails.count);
@@ -216,7 +249,7 @@ void writeThreadsToDirectory(NSArray<Email *> *emails, NSString *dirPath) {
             msgInThread++;
         }
         NSError *error = nil;
-        [threadText writeToFile:fullPath atomically:YES encoding:NSASCIIStringEncoding error:&error];
+        [threadText writeToFile:fullPath atomically:YES encoding:NSUTF8StringEncoding error:&error];
         threadNum++;
     }
     printf("[INFO] Exported %lu threads (each as a single file named 'export ...').\n", (unsigned long)[threads count]);
@@ -281,7 +314,7 @@ void summarizeEmailsToDirectory(NSArray<Email *> *emails, NSString *dirPath) {
         NSString *filename = safeSummaryFilename(subject, threadNum);
         NSString *fullPath = [dirPath stringByAppendingPathComponent:filename];
         NSError *error = nil;
-        [summary writeToFile:fullPath atomically:YES encoding:NSASCIIStringEncoding error:&error];
+        [summary writeToFile:fullPath atomically:YES encoding:NSUTF8StringEncoding error:&error];
         threadNum++;
     }
     printf("[INFO] Wrote summary of %lu threads.\n", (unsigned long)[threads count]);
