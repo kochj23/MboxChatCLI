@@ -127,3 +127,7 @@ summaries/
 *~
 .build/
 *.xcuserstate
+
+# Swift Package Manager
+Package.resolved
+.swiftpm/
