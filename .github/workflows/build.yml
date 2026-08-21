@@ -13,7 +13,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Build
+    - name: Build (Xcode command-line tool, ObjC + Swift)
       run: |
         XCODEPROJ=$(find . -name "*.xcodeproj" -maxdepth 2 | head -1)
         if [ -z "$XCODEPROJ" ]; then
@@ -27,6 +27,7 @@ jobs:
         fi
 
         echo "Building scheme: $SCHEME"
+        set -o pipefail
         xcodebuild build \
           -project "$XCODEPROJ" \
           -scheme "$SCHEME" \
@@ -34,3 +35,8 @@ jobs:
           CODE_SIGNING_ALLOWED=NO \
           SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
           | tail -20
+
+    - name: Test (SwiftPM — network-free LoadBalancer logic)
+      run: |
+        set -o pipefail
+        swift test | tail -40
