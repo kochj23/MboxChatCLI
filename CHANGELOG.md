@@ -31,6 +31,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implement JSON/CSV export
 - Add regex search support
 
+## [1.1.0] - 2026-11-11
+
+### Changed
+- AI: migrated to NovaAIKit 1.0.0 (AI on/off, built-in keyword-search fallback, backend picker: Auto, Ollama, MLX,
+  TinyLLM, TinyChat, OpenWebUI, Nova Gateway, OpenRouter, OpenAI; model picker and editable URLs; Keychain-only
+  keys under com.jkoch.mboxchatcli.*, https-only; status report; Auto failover with timeouts/retries; output
+  validation). The tool's own load balancer, OpenRouter client, model registry and Keychain store were removed.
+- `ask` in the REPL now answers from the loaded emails (most relevant 8 as context).
+- New flags: `--ai`, `--no-ai`, `--backend`, `--model`, `--url`, `--timeout`, `--save`, `--set-key`, `--clear-key`,
+  `--list-models`, `--ai-status`, `--version`; REPL command `ai`.
+
+### Security
+- API keys are no longer read from the environment (`OPENROUTER_API_KEY`); they live only in the Keychain.
+- One-time migration: the shared OpenRouter key (com.jkoch.aistudio.openrouter, left in place for AIStudio) is
+  copied to the tool's own service; plaintext OpenAI keys in UserDefaults move to the Keychain; obsolete
+  Google/Azure/AWS/IBM secrets are deleted.
+
+### Removed
+- Google Cloud / Azure / AWS / IBM Watson backends and the dead root-level AIBackendManager copies.
+- `--policy` and `--llm-config` (accepted and ignored with a note).
+
 ## [1.0.0] - 2024-10-15
 
 ### Added

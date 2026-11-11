@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C13A624538CD9CE84F6D6499 /* NovaAIKit in Frameworks */ = {isa = PBXBuildFile; productRef = C37BD94B555B2D82F2A74C93 /* NovaAIKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		D09EA7252E9F0BCB00C69380 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -25,6 +29,8 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D09EA7292E9F0BCB00C69380 /* MboxChatCLI */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = MboxChatCLI;
 			sourceTree = "<group>";
 		};
@@ -35,6 +41,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C13A624538CD9CE84F6D6499 /* NovaAIKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -77,6 +84,7 @@
 			);
 			name = MboxChatCLI;
 			packageProductDependencies = (
+				C37BD94B555B2D82F2A74C93 /* NovaAIKit */,
 			);
 			productName = MboxChatCLI;
 			productReference = D09EA7272E9F0BCB00C69380 /* MboxChatCLI */;
@@ -105,6 +113,9 @@
 			);
 			mainGroup = D09EA71E2E9F0BCB00C69380;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				397A71C17AC41ECF71668AD2 /* XCRemoteSwiftPackageReference "NovaAIKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D09EA7282E9F0BCB00C69380 /* Products */;
 			projectDirPath = "";
@@ -289,6 +300,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		397A71C17AC41ECF71668AD2 /* XCRemoteSwiftPackageReference "NovaAIKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kochj23/NovaAIKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C37BD94B555B2D82F2A74C93 /* NovaAIKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 397A71C17AC41ECF71668AD2 /* XCRemoteSwiftPackageReference "NovaAIKit" */;
+			productName = NovaAIKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D09EA71F2E9F0BCB00C69380 /* Project object */;
 }

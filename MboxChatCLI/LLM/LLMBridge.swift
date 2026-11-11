@@ -2,251 +2,182 @@
 //  LLMBridge.swift
 //  MboxChatCLI
 //
-//  The command-line surface for the multi-model LLM load balancer. A CLI has no
-//  settings UI, so the three balancing modes are exposed through flags, a JSON
-//  config file, and environment variables instead. This @objc bridge is called
-//  from the Objective-C `main.m` entry point.
-//
-//  Modes (composable — any combination is valid):
-//    --all-local      LoadBalancer over ALL local models (Ollama /api/tags + MLX)
-//    --frontier       All OpenRouter frontier models (needs OPENROUTER_API_KEY or Keychain)
-//    --nova-gateway   Add the OPTIONAL Nova Gateway (127.0.0.1:18792). NEVER required.
-//
-//  With no mode flag the historical single-backend behavior is kept (auto/Ollama).
+//  The command-line surface for the tool's AI (NovaAIKit), called from the Objective-C `main.m`.
+//  A CLI has no settings window, so the NovaAIKit settings (AI on/off, backend, models, URLs, timeout, keys) are
+//  driven by flags; `--save` keeps them. Keys go only into the Keychain (`--set-key`, read from stdin).
 //
 //  Copyright © 2026 Jordan Koch. All rights reserved.
 //
 
 import Foundation
+import NovaAIKit
 
 @objc(LLMBridge)
+@MainActor
 public final class LLMBridge: NSObject {
 
-    /// True when `args` request an LLM action, so `main.m` should hand off to the
-    /// bridge instead of running the interactive MBOX REPL.
+    /// True when `args` ask for an AI action, so `main.m` hands off here instead of starting the MBOX REPL.
     @objc public static func isLLMInvocation(_ args: [String]) -> Bool {
-        let triggers: Set<String> = ["--all-local", "--frontier", "--nova-gateway", "--llm-status", "--llm-help", "--ask"]
-        return args.contains { triggers.contains($0) }
+        MboxAIOptions.isAIInvocation(args)
     }
 
-    /// Entry point: resolve config (defaults → file → env → flags), then run the
-    /// requested action. Returns a process exit code.
+    /// Non-interactive entry point. Returns the process exit code.
+    @discardableResult
     @objc public static func run(_ args: [String]) -> Int32 {
-        if args.contains("--llm-help") {
-            printUsage()
-            return 0
+        let options: MboxAIOptions
+        do {
+            options = try MboxAIOptions.parse(Array(args.dropFirst()), environment: ProcessInfo.processInfo.environment)
+        } catch {
+            printError((error as? LocalizedError)?.errorDescription ?? "\(error)")
+            return 2
         }
+        options.notices.forEach { printError("note: \($0)") }
 
-        var config = LLMConfig()
-        var systemPrompt: String? = nil
-        var askPrompt: String? = nil
-        var wantStatus = false
+        if options.help { printUsage(); return 0 }
+        if options.version { print("MboxChatCLI \(MboxChatCLIVersion.current)"); return 0 }
 
-        // 1. Config file (flag --llm-config, else env MBOX_LLM_CONFIG).
-        let env = ProcessInfo.processInfo.environment
-        let configPath = value(after: "--llm-config", in: args) ?? env["MBOX_LLM_CONFIG"]
-        if let path = configPath, let loaded = loadConfig(path: path) {
-            config = loaded
+        let shared = AppAI.shared
+        if let b = options.clearKey {
+            guard b.acceptsKey else { printError("\(b.displayName) takes no API key."); return 2 }
+            shared.setAPIKey(nil, for: b)
+            print("\(b.displayName) key removed from the Keychain.")
         }
-
-        // 2. Environment.
-        if let v = env["OLLAMA_URL"], !v.isEmpty { config.ollamaURL = v }
-        if let v = env["NOVA_GATEWAY_URL"], !v.isEmpty { config.novaGatewayURL = v }
-        if let v = env["OPENROUTER_API_KEY"], !v.isEmpty { config.openRouterAPIKey = v }
-        if isTruthy(env["MBOX_LLM_ALL_LOCAL"]) { config.useAllLocalModels = true }
-        if isTruthy(env["MBOX_LLM_FRONTIER"]) { config.enableAllFrontierModels = true }
-        if isTruthy(env["MBOX_LLM_NOVA"]) { config.useNovaGateway = true }
-
-        // 3. Flags (highest precedence).
-        var i = 0
-        while i < args.count {
-            let arg = args[i]
-            switch arg {
-            case "--all-local": config.useAllLocalModels = true
-            case "--frontier": config.enableAllFrontierModels = true
-            case "--nova-gateway": config.useNovaGateway = true
-            case "--llm-status": wantStatus = true
-            case "--policy":
-                if let v = next(&i, args) { config.balancerPolicy = v }
-            case "--ollama-url":
-                if let v = next(&i, args) { config.ollamaURL = v }
-            case "--nova-url":
-                if let v = next(&i, args) { config.novaGatewayURL = v }
-            case "--ollama-model":
-                if let v = next(&i, args) { config.selectedOllamaModel = v }
-            case "--openrouter-model":
-                if let v = next(&i, args) { config.selectedOpenRouterModel = v }
-            case "--system":
-                if let v = next(&i, args) { systemPrompt = v }
-            case "--ask":
-                if let v = next(&i, args) { askPrompt = v }
-            case "--llm-config":
-                _ = next(&i, args) // already consumed above
-            default:
-                break
+        if let b = options.setKey {
+            guard b.acceptsKey else { printError("\(b.displayName) takes no API key."); return 2 }
+            guard let key = readSecretLine(prompt: "\(b.displayName) API key (input hidden): "), !key.isEmpty else {
+                printError("No key entered; nothing stored.")
+                return 2
             }
-            i += 1
+            guard shared.setAPIKey(key, for: b) else { printError("Could not store the key in the Keychain."); return 1 }
+            print("\(b.displayName) key stored in the Keychain (\(AppAI.configuration.keychainService(for: b))).")
         }
 
-        let manager = LLMBackendManager(config: config)
-
-        if wantStatus {
-            return runStatus(manager: manager, config: config)
-        }
-
-        guard let prompt = askPrompt, !prompt.isEmpty else {
-            // A mode was selected but nothing to do — show status so the user sees
-            // the resolved pool, then explain how to ask a question.
-            _ = runStatus(manager: manager, config: config)
-            FileHandle.standardError.write(Data("\nNo prompt given. Use --ask \"your question\" to run a generation.\n".utf8))
-            return 0
-        }
-
-        return runAsk(manager: manager, prompt: prompt, systemPrompt: systemPrompt)
-    }
-
-    // MARK: - Actions
-
-    private static func runStatus(manager: LLMBackendManager, config: LLMConfig) -> Int32 {
-        print("MboxChatCLI — LLM backend status")
-        print("  mode: all-local=\(config.useAllLocalModels)  frontier=\(config.enableAllFrontierModels)  nova-gateway=\(config.useNovaGateway)")
-        print("  balancer policy: \(manager.balancerPolicy)")
-        print("  ollama:  \(config.ollamaURL)")
-        print("  nova:    \(config.novaGatewayURL) (optional — never required)")
-        print("  openrouter key: \(manager.hasOpenRouterKey ? "present" : "absent")")
-
-        let pool = waitFor { await manager.discoverEnabledPool() }
-        if pool.isEmpty {
-            print("  balancer pool: (empty — no balancing toggle set, or no models discovered)")
+        let ai: NovaAI
+        if options.save {
+            shared.settings = options.applied(to: shared.settings)
+            ai = shared
+            if options.changesSettings { print("AI settings saved.") }
         } else {
-            print("  balancer pool (\(pool.count) model(s)):")
-            for m in pool {
-                print("    - [\(m.backend.rawValue)] \(m.displayName)")
-            }
+            ai = options.changesSettings ? AppAI.transient(options.applied(to: shared.settings)) : shared
+        }
+
+        if options.listModels {
+            let b = ai.settings.backend == .auto ? NovaAIBackend.ollama : ai.settings.backend
+            let models = waitFor { await ai.listModels(for: b) }
+            print("\(b.displayName) models:")
+            (models.isEmpty ? ["(none found)"] : models).forEach { print("  \($0)") }
+        }
+
+        if options.status {
+            waitFor { await ai.refreshStatus() }
+            MboxAIStatusReport.lines(ai).forEach { print($0) }
+        }
+
+        if let question = options.ask {
+            return ask(question, system: options.system, emails: [], ai: ai)
+        }
+
+        let didSomething = options.status || options.listModels || options.setKey != nil || options.clearKey != nil
+            || (options.save && options.changesSettings)
+        if !didSomething {
+            waitFor { await ai.refreshStatus() }
+            MboxAIStatusReport.lines(ai).forEach { print($0) }
+            printError("\nNo prompt given. Use --ask \"your question\" to run a generation.")
         }
         return 0
     }
 
-    private static func runAsk(manager: LLMBackendManager, prompt: String, systemPrompt: String?) -> Int32 {
-        do {
-            let answer = try waitForThrowing {
-                try await manager.generate(prompt: prompt, systemPrompt: systemPrompt)
-            }
-            print(answer)
-            return 0
-        } catch {
-            let message = (error as? LocalizedError)?.errorDescription ?? "\(error)"
-            FileHandle.standardError.write(Data("LLM error: \(message)\n".utf8))
-            return 1
-        }
+    /// The REPL's `ask` command: the question is answered from the loaded emails
+    /// (dictionaries with from/subject/date/body).
+    @discardableResult
+    @objc public static func ask(_ question: String, emails: [[String: String]]) -> Int32 {
+        ask(question, system: nil, emails: emails.map(MboxEmail.init(dictionary:)), ai: AppAI.shared)
+    }
+
+    // MARK: - Actions
+
+    private static func ask(_ question: String, system: String?, emails: [MboxEmail], ai: NovaAI) -> Int32 {
+        let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { printError("Usage: ask <question>"); return 2 }
+        let result = waitFor { await MboxAsk.answer(q, system: system, emails: emails, totalLoaded: emails.count, ai: ai) }
+        printError("[\(result.source.label)]")
+        print(result.value)
+        return 0
     }
 
     // MARK: - Usage
 
     private static func printUsage() {
-        let usage = """
-        MboxChatCLI — multi-model LLM load balancer
+        print("""
+        MboxChatCLI \(MboxChatCLIVersion.current) — MBOX explorer with optional AI (NovaAIKit)
 
         USAGE:
-          MboxChatCLI [--all-local] [--frontier] [--nova-gateway] [options] --ask "prompt"
-          MboxChatCLI --llm-status [modes...]
+          MboxChatCLI [file.mbox ...]                 Interactive REPL (from/subject/count/write/export/summarize/ask)
+          MboxChatCLI [settings] --ask "question"     One answer, then exit
+          MboxChatCLI [settings] --ai-status          AI status: backend, reachability, keys (stored or not)
 
-        MODES (composable; default = single-backend auto/Ollama):
-          --all-local          Balance across ALL local models (Ollama + MLX)
-          --frontier           Add all OpenRouter frontier models
-          --nova-gateway       Add the OPTIONAL Nova Gateway (never required)
+        SETTINGS (this run only; add --save to keep them):
+          --ai on|off            AI on/off. Off = built-in keyword search, nothing leaves this Mac
+          --no-ai                Same as --ai off
+          --backend B            auto | ollama | mlx | tinyllm | tinychat | openwebui | novagateway | openrouter | openai
+                                 auto fails over local first: \(NovaAIBackend.autoOrder.map(\.rawValue).joined(separator: " → "))
+          --model M              Model for the chosen backend (Ollama when auto)
+          --url B=URL            Base URL for backend B (e.g. --url ollama=http://localhost:11434)
+          --timeout SECONDS      Per-request timeout (2–600)
+          --save                 Persist the settings above
 
-        ACTIONS:
-          --ask "prompt"       Run one generation and print the answer
-          --llm-status         Print resolved backends and the balancer pool
-          --llm-help           Show this help
+        KEYS (macOS Keychain only, service com.jkoch.mboxchatcli.<backend>; https-only for keyed backends):
+          --set-key B            Read B's API key from stdin (hidden) and store it
+          --clear-key B          Remove B's key
 
-        OPTIONS:
-          --system "text"      System prompt
-          --policy P           Balancer policy: leastBusy (default) | roundRobin
-          --ollama-url URL     Override Ollama base URL
-          --nova-url URL       Override Nova Gateway base URL
-          --ollama-model M     Ollama model name (single-backend mode)
-          --openrouter-model M OpenRouter model id (single-backend frontier)
-          --llm-config PATH    Load an LLMConfig JSON file
+        OTHER:
+          --system "text"        System prompt for --ask
+          --list-models          Models the chosen backend offers
+          --version              Print the version
+          --ai-help              This help
 
-        ENVIRONMENT:
-          OPENROUTER_API_KEY   OpenRouter key (else the macOS Keychain is used)
-          OLLAMA_URL           Ollama base URL
-          NOVA_GATEWAY_URL     Nova Gateway base URL
-          MBOX_LLM_ALL_LOCAL   Truthy → --all-local
-          MBOX_LLM_FRONTIER    Truthy → --frontier
-          MBOX_LLM_NOVA        Truthy → --nova-gateway
-          MBOX_LLM_CONFIG      Path to an LLMConfig JSON file
+        ENVIRONMENT (non-secret overrides): OLLAMA_URL, NOVA_GATEWAY_URL, MBOX_AI_BACKEND.
+        Keys are never read from the environment.
 
-        Note: Nova Gateway is entirely optional. If its health check fails it is
-        simply dropped from the pool — the tool never hard-depends on Nova.
-        """
-        print(usage)
+        Pre-1.1 flags still work: --all-local (= --backend auto), --frontier (= openrouter),
+        --nova-gateway (= novagateway), --ollama-url, --nova-url, --ollama-model, --openrouter-model,
+        --llm-status, --llm-help. --policy and --llm-config are ignored.
+        """)
     }
 
-    // MARK: - Arg / config helpers
+    // MARK: - Helpers
 
-    private static func next(_ i: inout Int, _ args: [String]) -> String? {
-        guard i + 1 < args.count else { return nil }
-        i += 1
-        return args[i]
+    private static func printError(_ s: String) {
+        FileHandle.standardError.write(Data((s + "\n").utf8))
     }
 
-    private static func value(after flag: String, in args: [String]) -> String? {
-        guard let idx = args.firstIndex(of: flag), idx + 1 < args.count else { return nil }
-        return args[idx + 1]
-    }
-
-    private static func isTruthy(_ s: String?) -> Bool {
-        guard let s = s?.lowercased() else { return false }
-        return ["1", "true", "yes", "on"].contains(s)
-    }
-
-    private static func loadConfig(path: String) -> LLMConfig? {
-        let expanded = (path as NSString).expandingTildeInPath
-        guard let data = FileManager.default.contents(atPath: expanded) else {
-            FileHandle.standardError.write(Data("Could not read config file: \(expanded)\n".utf8))
-            return nil
+    /// Reads one line from stdin with echo off when stdin is a terminal. The value is never printed or logged.
+    private static func readSecretLine(prompt: String) -> String? {
+        let tty = isatty(STDIN_FILENO) == 1
+        var saved = termios()
+        if tty {
+            FileHandle.standardError.write(Data(prompt.utf8))
+            tcgetattr(STDIN_FILENO, &saved)
+            var noEcho = saved
+            noEcho.c_lflag &= ~tcflag_t(ECHO)
+            tcsetattr(STDIN_FILENO, TCSANOW, &noEcho)
         }
-        do {
-            return try JSONDecoder().decode(LLMConfig.self, from: data)
-        } catch {
-            FileHandle.standardError.write(Data("Invalid config JSON (\(expanded)): \(error)\n".utf8))
-            return nil
+        let line = readLine(strippingNewline: true)
+        if tty {
+            tcsetattr(STDIN_FILENO, TCSANOW, &saved)
+            FileHandle.standardError.write(Data("\n".utf8))
         }
+        return line?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    // MARK: - Sync bridge over async work (CLI is synchronous)
-
-    private static func waitFor<T>(_ operation: @escaping () async -> T) -> T {
-        let semaphore = DispatchSemaphore(value: 0)
-        // Using an unchecked box keeps this Swift-5-mode friendly.
-        let box = MutableBox<T>()
-        Task {
-            box.value = await operation()
-            semaphore.signal()
+    /// Runs async main-actor work from this synchronous entry point by spinning the main run loop
+    /// (a semaphore would deadlock: the work needs the main thread).
+    private static func waitFor<T>(_ operation: @escaping @MainActor () async -> T) -> T {
+        var result: T?
+        Task { @MainActor in result = await operation() }
+        while result == nil {
+            _ = RunLoop.main.run(mode: .default, before: Date(timeIntervalSinceNow: 0.05))
         }
-        semaphore.wait()
-        return box.value!
+        return result!
     }
-
-    private static func waitForThrowing<T>(_ operation: @escaping () async throws -> T) throws -> T {
-        let semaphore = DispatchSemaphore(value: 0)
-        let box = MutableBox<Result<T, Error>>()
-        Task {
-            do { box.value = .success(try await operation()) }
-            catch { box.value = .failure(error) }
-            semaphore.signal()
-        }
-        semaphore.wait()
-        return try box.value!.get()
-    }
-}
-
-/// A minimal mutable, unchecked-Sendable box used to ferry an async result back
-/// across a `DispatchSemaphore` boundary (the CLI entry point is synchronous).
-private final class MutableBox<U>: @unchecked Sendable {
-    var value: U?
-    init() {}
 }

@@ -177,7 +177,8 @@ void printHelp(void) {
     printf("  write <dir>          - Write each message as individual file (ASCII, no attachments/rtf)\n");
     printf("  export <dir>         - Write each thread (subject) as one file prefixed by 'export '\n");
     printf("  summarize <dir>      - Write a summary file per thread/subject\n");
-    printf("  ask <prompt>         - Ask the LLM (modes via env/config; see 'MboxChatCLI --llm-help')\n");
+    printf("  ask <question>       - Ask about the loaded emails (AI, or built-in keyword search when AI is off)\n");
+    printf("  ai                   - AI status (backend, reachability; settings: 'MboxChatCLI --ai-help')\n");
     printf("  help                 - Show help\n");
     printf("  exit                 - Quit\n");
 }
@@ -325,9 +326,8 @@ void summarizeEmailsToDirectory(NSArray<Email *> *emails, NSString *dirPath) {
 
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
-        // Multi-model LLM load balancer: when invoked with any LLM flag
-        // (--all-local / --frontier / --nova-gateway / --ask / --llm-status /
-        // --llm-help), hand off to the Swift bridge instead of the MBOX REPL.
+        // AI flags (--ask, --ai-status, --backend, --set-key, ... see --ai-help)
+        // go to the Swift bridge (NovaAIKit) instead of the MBOX REPL.
         NSArray<NSString *> *processArgs = [[NSProcessInfo processInfo] arguments];
         if ([LLMBridge isLLMInvocation:processArgs]) {
             return [LLMBridge run:processArgs];
@@ -451,9 +451,18 @@ int main(int argc, const char * argv[]) {
                     printf("Usage: ask <prompt>\n");
                     continue;
                 }
-                // Modes (all-local / frontier / nova-gateway) come from env/config;
-                // reuse the same bridge as the non-interactive --ask path.
-                [LLMBridge run:@[@"--ask", prompt]];
+                // Answered from the loaded emails by AI (NovaAIKit), or by the built-in
+                // keyword search when AI is off or unreachable.
+                NSMutableArray<NSDictionary<NSString *, NSString *> *> *mail = [NSMutableArray arrayWithCapacity:allEmails.count];
+                for (Email *e in allEmails) {
+                    [mail addObject:@{@"from": e.from ?: @"", @"subject": e.subject ?: @"",
+                                      @"date": e.date ?: @"", @"body": e.body ?: @""}];
+                }
+                [LLMBridge ask:prompt emails:mail];
+                continue;
+            }
+            if ([[line lowercaseString] isEqualToString:@"ai"]) {
+                [LLMBridge run:@[@"MboxChatCLI", @"--ai-status"]];
                 continue;
             }
             printf("Unknown command. Type 'help' for commands.\n");

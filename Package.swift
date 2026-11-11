@@ -3,14 +3,10 @@
 //  Package.swift
 //  MboxChatCLI
 //
-//  A thin SwiftPM wrapper around the LLM load-balancer sources so the pure,
-//  network-free logic (model discovery parsing, pool composition, the load
-//  balancer) can be unit-tested with `swift test` in CI without dragging in the
-//  Objective-C command-line tool. The same Swift sources are compiled into the
-//  Xcode command-line tool target via its file-system-synchronized group.
-//
-//  The @objc CLI bridge (LLMBridge.swift) is excluded here — it belongs to the
-//  Objective-C tool target, not the testable library.
+//  A thin SwiftPM wrapper around the tool's Swift AI layer (MboxChatCLI/LLM) so its NovaAIKit integration
+//  (option parsing, the ask feature's prompt/fallback/validator, legacy migration, status report) can be
+//  unit-tested with `swift test` — no network, no real Keychain. The same sources are compiled into the Xcode
+//  command-line tool target via its file-system-synchronized group.
 //
 
 import PackageDescription
@@ -18,15 +14,18 @@ import PackageDescription
 let package = Package(
     name: "MboxLLM",
     platforms: [.macOS(.v13)],
+    dependencies: [
+        .package(url: "https://github.com/kochj23/NovaAIKit.git", from: "1.0.0"),
+    ],
     targets: [
         .target(
             name: "MboxLLM",
-            path: "MboxChatCLI/LLM",
-            exclude: ["LLMBridge.swift"]
+            dependencies: [.product(name: "NovaAIKit", package: "NovaAIKit")],
+            path: "MboxChatCLI/LLM"
         ),
         .testTarget(
             name: "MboxLLMTests",
-            dependencies: ["MboxLLM"],
+            dependencies: ["MboxLLM", .product(name: "NovaAIKit", package: "NovaAIKit")],
             path: "MboxLLMTests"
         )
     ]
